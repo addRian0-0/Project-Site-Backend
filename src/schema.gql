@@ -19,8 +19,14 @@ type Contenido {
   unidad_id: Float!
 }
 
+input CreateAlumnoInput {
+  email: String!
+  nombre: String!
+}
+
 type Mutation {
   completarContenido(alumnoId: Int!, contenidoId: Int!): Alumno
+  crearAlumno(datos: CreateAlumnoInput!): Alumno!
 }
 
 type Query {

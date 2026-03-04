@@ -7,21 +7,10 @@ export class ContenidoResolver {
 
     @Query(() => [Contenido], { name: 'contenidos' })
     async getContenidos() {
-    // Datos de prueba
-    return[{
-            contenido_id: 1,
-            titulo: 'Introduccion a compiladores',
-            descripcion: 'Conceptos básicos de analizadores lexicos',
-            tipo: TipoContenido.LECCION,
-            unidad_id: 1,
-        },
-        {
-            contenido_id: 2,
-            titulo: 'Practica 1',
-            descripcion: 'Subir el archivo .flex aqui',
-            tipo: TipoContenido.TAREA,
-            unidad_id: 1,
-        },];
+        return [
+        { id: 101, titulo: 'Introduccion a compiladores', descripcion: 'Conceptos basicos.' },
+        { id: 102, titulo: 'Practica 1', descripcion: 'Subir el archivo .flex aqui.' }
+        ];
     }
 
     @Query(() => Contenido, { name: 'contenido', nullable: true })
@@ -35,4 +24,5 @@ export class ContenidoResolver {
             unidad_id: 1,
         };
     }
+    
 }

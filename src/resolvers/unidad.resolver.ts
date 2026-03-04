@@ -15,7 +15,10 @@ export class UnidadResolver {
 
     @ResolveField(() => [Contenido])
     async contenidos(@Parent() unidad: Unidad) {
-        // Esta vacio por ahora
-        return []; 
+        // Datos simulan la relacion 1:N
+        return [
+        { id: 101, titulo: 'Introducción a compiladores', descripcion: 'Conceptos basicos.' },
+        { id: 102, titulo: 'Practica 1', descripcion: 'Subir el archivo .flex aqua.' }
+        ];
     }
 }
