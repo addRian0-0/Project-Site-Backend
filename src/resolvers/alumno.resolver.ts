@@ -3,17 +3,29 @@ import { Resolver, Query, Mutation, Args, Int, ResolveField, Parent } from '@nes
 import { Alumno } from '../entities/alumno.entity';
 import { Contenido } from '../entities/contenido.entity';
 import { CreateAlumnoInput } from '../dto/create-alumno.input';
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
 
 @Resolver(() => Alumno)
 export class AlumnoResolver {
     
-    @Query(() => [Alumno], { name: 'alumnos' })
-    getAlumnos() {
-        return [
-            { id: 1, nombre: 'Ignacio Herrera', email: 'nacho@ejemplo.com' },
-            { id: 2, nombre: 'Ricardo Aguas', email: 'richi@ejemplo.com' }
-        ];
+@Query(() => [Alumno], { name: 'alumnos' })
+async getAlumnos() {
+  // Le pedimos a Prisma que busque en la tabla real de PostgreSQL
+  return await prisma.alumno.findMany();
+}
+
+@Mutation(() => Alumno, { name: 'crearAlumno' })
+async crearAlumno(@Args('datos') datos: CreateAlumnoInput) {
+  return await prisma.alumno.create({
+    data: {
+      nombre: datos.nombre,
+      email: datos.email
     }
+  });
+}
+
+
 
     @Mutation(() => Alumno, { nullable: true })
     async completarContenido(
@@ -32,19 +44,6 @@ export class AlumnoResolver {
         return [];
     }
 
-    // Aqui simulamos el guardado en la DB de Supabase
-    @Mutation(() => Alumno)
-    async crearAlumno(
-    @Args('datos') datos: CreateAlumnoInput,
-    ) {
-    
-    const nuevoAlumno = {
-        id: Math.floor(Math.random() * 1000), // ID aleatorio
-        nombre: datos.nombre,
-        email: datos.email,
-    };
-    
-    console.log('Nuevo alumno creado:', nuevoAlumno);
-    return nuevoAlumno;
-    }
+
+
 }
