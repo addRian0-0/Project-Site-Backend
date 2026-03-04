@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  postgres_db:
+    image: postgres:15
+    container_name: ipn_lms_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: ipn_lms
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
