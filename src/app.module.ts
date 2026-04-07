@@ -4,44 +4,35 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { join } from 'path';
 
-// --- Imports de servicios y módulos nuevos ---
+// --- Módulos de funcionalidad ---
 import { PrismaModule } from './prisma/prisma.module';
+import { AlumnoModule } from './alumno/alumno.module';
+import { ContenidoModule } from './contenido/contenido.module';
+import { UnidadModule } from './unidad/unidad.module';
 import { RubricaModule } from './rubrica/rubrica.module';
 import { InsigniaModule } from './insignia/insignia.module';
 
-// --- Imports de modulos existentes ---
-import { UnidadModule } from './unidad/unidad.module';
-
-// --- Otros resolvers y servicios ---
-import { AlumnoResolver } from './resolvers/alumno.resolver';
-import { ContenidoResolver } from './resolvers/contenido.resolver';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ContenidoService } from './services/contenido.service';
 
 @Module({
   imports: [
-    // 1. Modulos de datos y lógica
-    PrismaModule,     // Conexion DB
-    RubricaModule,    // Rúbricas
-    InsigniaModule,   // Insignias
-    UnidadModule,     // Unidad
+    PrismaModule,
+    AlumnoModule,
+    ContenidoModule,
+    UnidadModule,
+    RubricaModule,
+    InsigniaModule,
 
-    // 2. Configuracion de GraphQL
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
       sortSchema: true,
-      playground: true, 
+      playground: true,
       introspection: true,
     }),
   ],
   controllers: [AppController],
-  providers: [
-    AppService, 
-    AlumnoResolver, 
-    ContenidoResolver, 
-    ContenidoService,
-  ],
+  providers: [AppService],
 })
 export class AppModule {}

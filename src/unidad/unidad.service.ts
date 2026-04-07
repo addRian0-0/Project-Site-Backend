@@ -1,37 +1,35 @@
 import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateUnidadInput } from './dto/create-unidad.input';
 import { UpdateUnidadInput } from './dto/update-unidad.input';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
 
 @Injectable()
 export class UnidadService {
-  async findAll() {
-    return await prisma.unidad.findMany({
-      include: { 
-        contenidos: { orderBy: { orden: 'asc' } } 
-      },
-      orderBy: { id: 'asc' }
+  constructor(private prisma: PrismaService) {}
+
+  findAll() {
+    return this.prisma.unidad.findMany({
+      include: { contenidos: { orderBy: { orden: 'asc' } } },
+      orderBy: { id: 'asc' },
     });
   }
 
-  async findOne(id: number) {
-    return await prisma.unidad.findUnique({
+  findOne(id: number) {
+    return this.prisma.unidad.findUnique({
       where: { id },
-      include: { contenidos: true }
+      include: { contenidos: true },
     });
   }
 
   create(createUnidadInput: CreateUnidadInput) {
-    return 'Pendiente: Conectar con prisma.unidad.create';
+    return this.prisma.unidad.create({ data: createUnidadInput });
   }
 
   update(id: number, updateUnidadInput: UpdateUnidadInput) {
-    return `Pendiente: Conectar con prisma.unidad.update para el ID ${id}`;
+    return this.prisma.unidad.update({ where: { id }, data: updateUnidadInput });
   }
 
   remove(id: number) {
-    return `Pendiente: Conectar con prisma.unidad.delete para el ID ${id}`;
+    return this.prisma.unidad.delete({ where: { id } });
   }
 }
