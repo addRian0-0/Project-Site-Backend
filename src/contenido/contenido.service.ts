@@ -6,8 +6,10 @@ import { TipoMateria } from './entities/contenido.entity';
 export class ContenidoService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
-    const contenidos = await this.prisma.contenido.findMany();
+  async findAll(tipoMateria?: TipoMateria) {
+    const contenidos = await this.prisma.contenido.findMany({
+      where: tipoMateria ? { tipoMateria } : undefined,
+    });
 
     return contenidos.map((contenido) => ({
       ...contenido,

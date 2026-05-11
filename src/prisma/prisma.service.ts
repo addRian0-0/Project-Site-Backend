@@ -19,7 +19,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   });
 
   readonly contenido = {
-    findMany: async () => this.findContenidos(),
+    findMany: async (args?: QueryArgs) => this.findContenidosByTipoMateria(args?.where?.tipoMateria),
     findUnique: async ({ where }: QueryArgs) =>
       this.findContenidoById(Number(where?.id)),
   };
@@ -67,6 +67,13 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async findContenidos() {
+    return this.findContenidosByTipoMateria();
+  }
+
+  private async findContenidosByTipoMateria(tipoMateria?: unknown) {
+    const whereClause = typeof tipoMateria === 'string' ? 'WHERE "tipoMateria" = $1' : '';
+    const params = typeof tipoMateria === 'string' ? [tipoMateria] : [];
+
     return this.queryRows(`
       SELECT
         id,
@@ -79,8 +86,9 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
         contenido,
         "unidadId"
       FROM "Contenido"
+      ${whereClause}
       ORDER BY "unidadId" ASC, orden ASC, id ASC
-    `);
+    `, params);
   }
 
   private async findContenidoById(id: number) {
@@ -104,18 +112,34 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async findUnidades(args?: QueryArgs) {
-    const unidades = await this.queryRows(
-      'SELECT id, nombre FROM "Unidad" ORDER BY id ASC',
-    );
+    const tipoMateria = args?.where?.tipoMateria;
+    const unidades =
+      typeof tipoMateria === 'string'
+        ? await this.queryRows(
+            `
+              SELECT DISTINCT u.id, u.nombre
+              FROM "Unidad" u
+              INNER JOIN "Contenido" c ON c."unidadId" = u.id
+              WHERE c."tipoMateria" = $1
+              ORDER BY u.id ASC
+            `,
+            [tipoMateria],
+          )
+        : await this.queryRows('SELECT id, nombre FROM "Unidad" ORDER BY id ASC');
 
     if (!args?.include?.contenidos) {
       return unidades;
     }
 
-    const contenidos = await this.findContenidos();
+    const contenidos = await this.findContenidosByTipoMateria(tipoMateria);
     return unidades.map((unidad) => ({
       ...unidad,
-      contenidos: contenidos.filter((contenido) => contenido.unidadId === unidad.id),
+      contenidos: contenidos
+        .filter((contenido) => contenido.unidadId === unidad.id)
+        .map((contenido) => ({
+          ...contenido,
+          unidad,
+        })),
     }));
   }
 

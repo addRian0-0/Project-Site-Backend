@@ -2,13 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUnidadInput } from './dto/create-unidad.input';
 import { UpdateUnidadInput } from './dto/update-unidad.input';
+import { TipoMateria } from '../contenido/entities/contenido.entity';
 
 @Injectable()
 export class UnidadService {
   constructor(private prisma: PrismaService) {}
 
-  findAll() {
+  findAll(tipoMateria?: TipoMateria) {
     return this.prisma.unidad.findMany({
+      where: tipoMateria ? { tipoMateria } : undefined,
       include: { contenidos: { orderBy: { orden: 'asc' } } },
       orderBy: { id: 'asc' },
     });

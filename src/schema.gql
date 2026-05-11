@@ -50,11 +50,11 @@ type Mutation {
 type Query {
   alumnos: [Alumno!]!
   contenido(id: Int!): Contenido
-  contenidos: [Contenido!]!
+  contenidos(tipoMateria: TipoMateria): [Contenido!]!
   insignias: [Insignia!]!
   rubricasPorPeriodo(periodo: Int!): [Rubrica!]!
   unidad(id: Int!): Unidad
-  unidades: [Unidad!]!
+  unidades(tipoMateria: TipoMateria): [Unidad!]!
 }
 
 type Rubrica {

@@ -3,6 +3,7 @@ import { UnidadService } from './unidad.service';
 import { Unidad } from './entities/unidad.entity';
 import { CreateUnidadInput } from './dto/create-unidad.input';
 import { UpdateUnidadInput } from './dto/update-unidad.input';
+import { TipoMateria } from '../contenido/entities/contenido.entity';
 
 @Resolver(() => Unidad)
 export class UnidadResolver {
@@ -10,8 +11,11 @@ export class UnidadResolver {
 
   // Consulta para el menú principal (TRAE TODO)
   @Query(() => [Unidad], { name: 'unidades' }) 
-  findAll() {
-    return this.unidadService.findAll();
+  findAll(
+    @Args('tipoMateria', { type: () => TipoMateria, nullable: true })
+    tipoMateria?: TipoMateria,
+  ) {
+    return this.unidadService.findAll(tipoMateria);
   }
 
   // Consulta para ver un tema específico (TRAE UNA)

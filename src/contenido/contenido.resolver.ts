@@ -1,5 +1,5 @@
 import { Resolver, Query, Args, Int } from '@nestjs/graphql';
-import { Contenido } from './entities/contenido.entity';
+import { Contenido, TipoMateria } from './entities/contenido.entity';
 import { ContenidoService } from './contenido.service';
 
 @Resolver(() => Contenido)
@@ -7,8 +7,11 @@ export class ContenidoResolver {
   constructor(private readonly contenidoService: ContenidoService) {}
 
   @Query(() => [Contenido], { name: 'contenidos' })
-  findAll() {
-    return this.contenidoService.findAll();
+  findAll(
+    @Args('tipoMateria', { type: () => TipoMateria, nullable: true })
+    tipoMateria?: TipoMateria,
+  ) {
+    return this.contenidoService.findAll(tipoMateria);
   }
 
   @Query(() => Contenido, { name: 'contenido', nullable: true })
