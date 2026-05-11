@@ -35,11 +35,35 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   };
 
   readonly alumno = {
-    findMany: async () => this.queryRows('SELECT id, nombre, email FROM "Alumno" ORDER BY id ASC'),
+    findMany: async () =>
+      this.queryRows(
+        'SELECT id, nombre, apellido, email, grupo, password FROM "Alumno" ORDER BY id ASC',
+      ),
+    findUnique: async ({ where }: QueryArgs) => {
+      if (where?.email) {
+        return this.queryOne(
+          'SELECT id, nombre, apellido, email, grupo, password FROM "Alumno" WHERE email = $1',
+          [where.email],
+        );
+      }
+
+      if (where?.id) {
+        return this.queryOne(
+          'SELECT id, nombre, apellido, email, grupo, password FROM "Alumno" WHERE id = $1',
+          [where.id],
+        );
+      }
+
+      return null;
+    },
     create: async ({ data }: QueryArgs) =>
       this.queryOne(
-        'INSERT INTO "Alumno" (nombre, email) VALUES ($1, $2) RETURNING id, nombre, email',
-        [data?.nombre, data?.email],
+        `
+          INSERT INTO "Alumno" (nombre, apellido, email, grupo, password)
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING id, nombre, apellido, email, grupo, password
+        `,
+        [data?.nombre, data?.apellido, data?.email, data?.grupo, data?.password],
       ),
   };
 
@@ -59,6 +83,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   };
 
   async onModuleInit() {
+    await this.ensureAlumnoSchema();
     await this.pool.query('SELECT 1');
   }
 
@@ -212,5 +237,14 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
 
     const env = readFileSync('.env', 'utf8');
     return env.match(/DATABASE_URL="?([^"\n]+)"?/)?.[1];
+  }
+
+  private async ensureAlumnoSchema() {
+    await this.pool.query(`
+      ALTER TABLE "Alumno"
+      ADD COLUMN IF NOT EXISTS apellido TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS grupo TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS password TEXT NOT NULL DEFAULT ''
+    `);
   }
 }

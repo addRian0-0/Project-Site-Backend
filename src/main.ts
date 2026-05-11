@@ -8,7 +8,7 @@ async function bootstrap() {
     credentials: true,
   });
   // Escuchamos en el 3001 para evitar bloqueos del 3000
-  await app.listen(3001, '0.0.0.0');
-  console.log('SERVIDOR CORRIENDO EN: http://localhost:3001/graphql');
+  await app.listen(8080, '0.0.0.0');
+  console.log('SERVIDOR CORRIENDO EN: http://localhost:8080/graphql');
 }
 bootstrap();

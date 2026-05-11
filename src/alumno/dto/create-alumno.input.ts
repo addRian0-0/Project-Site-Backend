@@ -6,5 +6,14 @@ export class CreateAlumnoInput {
   nombre: string;
 
   @Field()
+  apellido: string;
+
+  @Field()
   email: string;
+
+  @Field()
+  password: string;
+
+  @Field()
+  grupo: string;
 }

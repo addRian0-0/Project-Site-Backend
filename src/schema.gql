@@ -4,8 +4,10 @@
 
 """Entidad que representa a un alumno del sistema"""
 type Alumno {
+  apellido: String!
   contenidosCompletados: [Contenido!]
   email: String!
+  grupo: String!
   id: Int!
   nombre: String!
 }
@@ -24,8 +26,11 @@ type Contenido {
 }
 
 input CreateAlumnoInput {
+  apellido: String!
   email: String!
+  grupo: String!
   nombre: String!
+  password: String!
 }
 
 input CreateUnidadInput {
@@ -39,10 +44,16 @@ type Insignia {
   nombre: String!
 }
 
+input LoginAlumnoInput {
+  email: String!
+  password: String!
+}
+
 type Mutation {
   completarContenido(alumnoId: Int!, contenidoId: Int!): Alumno
   crearAlumno(datos: CreateAlumnoInput!): Alumno!
   createUnidad(createUnidadInput: CreateUnidadInput!): Unidad!
+  iniciarSesion(datos: LoginAlumnoInput!): Alumno!
   removeUnidad(id: Int!): Unidad!
   updateUnidad(updateUnidadInput: UpdateUnidadInput!): Unidad!
 }

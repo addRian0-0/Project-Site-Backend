@@ -61,9 +61,12 @@ model Insignia {
 }
 
 model Alumno {
-  id     Int    @id @default(autoincrement())
-  nombre String
-  email  String @unique
+  id       Int    @id @default(autoincrement())
+  nombre   String
+  apellido String @default("")
+  email    String @unique
+  grupo    String @default("")
+  password String @default("")
 }
 
 // 5. TABLA UNIDAD 

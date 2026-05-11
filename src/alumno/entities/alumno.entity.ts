@@ -10,7 +10,13 @@ export class Alumno {
   nombre: string;
 
   @Field()
+  apellido: string;
+
+  @Field()
   email: string;
+
+  @Field()
+  grupo: string;
 
   @Field(() => [Contenido], { nullable: true })
   contenidosCompletados?: Contenido[];

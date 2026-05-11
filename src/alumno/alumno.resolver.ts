@@ -2,6 +2,7 @@ import { Resolver, Query, Mutation, Args, Int, ResolveField, Parent } from '@nes
 import { Alumno } from './entities/alumno.entity';
 import { Contenido } from '../contenido/entities/contenido.entity';
 import { CreateAlumnoInput } from './dto/create-alumno.input';
+import { LoginAlumnoInput } from './dto/login-alumno.input';
 import { AlumnoService } from './alumno.service';
 
 @Resolver(() => Alumno)
@@ -16,6 +17,11 @@ export class AlumnoResolver {
   @Mutation(() => Alumno, { name: 'crearAlumno' })
   crearAlumno(@Args('datos') datos: CreateAlumnoInput) {
     return this.alumnoService.create(datos);
+  }
+
+  @Mutation(() => Alumno, { name: 'iniciarSesion' })
+  iniciarSesion(@Args('datos') datos: LoginAlumnoInput) {
+    return this.alumnoService.login(datos);
   }
 
   @Mutation(() => Alumno, { nullable: true })
