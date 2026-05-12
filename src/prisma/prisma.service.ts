@@ -227,16 +227,33 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private getDatabaseUrl() {
-    if (process.env.DATABASE_URL) {
-      return process.env.DATABASE_URL;
+    const databaseUrl = process.env.DATABASE_URL?.trim();
+    if (databaseUrl) {
+      return databaseUrl;
+    }
+
+    if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+      throw new Error(
+        'DATABASE_URL no esta configurada. En Railway debes vincular una base PostgreSQL o definir DATABASE_URL manualmente.',
+      );
     }
 
     if (!existsSync('.env')) {
-      return undefined;
+      throw new Error(
+        'DATABASE_URL no esta configurada. Define DATABASE_URL en tu entorno local o en un archivo .env.',
+      );
     }
 
     const env = readFileSync('.env', 'utf8');
-    return env.match(/DATABASE_URL="?([^"\n]+)"?/)?.[1];
+    const envDatabaseUrl = env.match(/DATABASE_URL="?([^"\n]+)"?/)?.[1]?.trim();
+
+    if (envDatabaseUrl) {
+      return envDatabaseUrl;
+    }
+
+    throw new Error(
+      'DATABASE_URL no esta configurada. Revisa el archivo .env o las variables de entorno del despliegue.',
+    );
   }
 
   private async ensureAlumnoSchema() {

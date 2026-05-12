@@ -59,6 +59,22 @@ $ npm run test:cov
 
 ## Deployment
 
+### Railway
+
+Variables requeridas en producción:
+
+```bash
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DBNAME
+NODE_ENV=production
+```
+
+Notas de despliegue:
+
+- Railway debe exponer `PORT`; la app ya lo toma automáticamente.
+- El servicio ahora arranca con `node dist/main`, no con `nest start`.
+- Si `DATABASE_URL` no existe, la app fallará con un error explícito en vez de intentar conectarse a `localhost:5432`.
+- Si usas PostgreSQL de Railway, vincula la base al servicio backend para que inyecte `DATABASE_URL`.
+
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
