@@ -1,36 +1,32 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TipoMateria } from './entities/contenido.entity';
+import { CreateContenidoInput } from './dto/create-contenido.input';
+import { UpdateContenidoInput } from './dto/update-contenido.input';
 
 @Injectable()
 export class ContenidoService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(tipoMateria?: TipoMateria) {
-    const contenidos = await this.prisma.contenido.findMany({
+  findAll(tipoMateria?: TipoMateria) {
+    return this.prisma.contenido.findMany({
       where: tipoMateria ? { tipoMateria } : undefined,
     });
-
-    return contenidos.map((contenido) => ({
-      ...contenido,
-      tipoMateria:
-        (contenido as { tipoMateria?: TipoMateria }).tipoMateria ??
-        TipoMateria.TEORIA_DE_LENGUAJES,
-    }));
   }
 
-  async findOne(id: number) {
-    const contenido = await this.prisma.contenido.findUnique({ where: { id } });
+  findOne(id: number) {
+    return this.prisma.contenido.findUnique({ where: { id } });
+  }
 
-    if (!contenido) {
-      return null;
-    }
+  create(datos: CreateContenidoInput) {
+    return this.prisma.contenido.create({ data: datos });
+  }
 
-    return {
-      ...contenido,
-      tipoMateria:
-        (contenido as { tipoMateria?: TipoMateria }).tipoMateria ??
-        TipoMateria.TEORIA_DE_LENGUAJES,
-    };
+  update(datos: UpdateContenidoInput) {
+    return this.prisma.contenido.update({ where: { id: datos.id }, data: datos });
+  }
+
+  remove(id: number) {
+    return this.prisma.contenido.delete({ where: { id } });
   }
 }

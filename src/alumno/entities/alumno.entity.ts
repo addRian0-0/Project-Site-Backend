@@ -1,7 +1,21 @@
-import { ObjectType, Field, Int } from '@nestjs/graphql';
+import { Field, Int, ObjectType, registerEnumType } from '@nestjs/graphql';
 import { Contenido } from '../../contenido/entities/contenido.entity';
 
-@ObjectType({ description: 'Entidad que representa a un alumno del sistema' })
+export enum RolUsuario {
+  ALUMNO = 'ALUMNO',
+  MODERADOR = 'MODERADOR',
+  ADMINISTRADOR = 'ADMINISTRADOR',
+}
+
+export enum EstadoUsuario {
+  ACTIVO = 'ACTIVO',
+  INACTIVO = 'INACTIVO',
+}
+
+registerEnumType(RolUsuario, { name: 'RolUsuario' });
+registerEnumType(EstadoUsuario, { name: 'EstadoUsuario' });
+
+@ObjectType({ description: 'Usuario autenticable del sistema' })
 export class Alumno {
   @Field(() => Int)
   id: number;
@@ -18,6 +32,21 @@ export class Alumno {
   @Field()
   grupo: string;
 
+  @Field(() => RolUsuario)
+  rol: RolUsuario;
+
+  @Field(() => EstadoUsuario)
+  estado: EstadoUsuario;
+
   @Field(() => [Contenido], { nullable: true })
   contenidosCompletados?: Contenido[];
+}
+
+@ObjectType()
+export class AuthPayload {
+  @Field()
+  token: string;
+
+  @Field(() => Alumno)
+  usuario: Alumno;
 }

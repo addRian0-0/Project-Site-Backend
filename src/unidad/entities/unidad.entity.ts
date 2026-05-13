@@ -1,4 +1,4 @@
-import { ObjectType, Field, Int } from '@nestjs/graphql';
+import { Field, Int, ObjectType } from '@nestjs/graphql';
 import { Contenido } from '../../contenido/entities/contenido.entity';
 
 @ObjectType()
@@ -9,7 +9,6 @@ export class Unidad {
   @Field()
   nombre: string;
 
-  // Aquí está la magia: le decimos que puede devolver un arreglo de Contenidos
   @Field(() => [Contenido], { nullable: true })
   contenidos?: Contenido[];
 }

@@ -1,8 +1,10 @@
-import { CreateUnidadInput } from './create-unidad.input';
-import { InputType, Field, Int, PartialType } from '@nestjs/graphql';
+import { Field, InputType, Int } from '@nestjs/graphql';
 
 @InputType()
-export class UpdateUnidadInput extends PartialType(CreateUnidadInput) {
+export class UpdateUnidadInput {
   @Field(() => Int)
   id: number;
+
+  @Field({ nullable: true })
+  nombre?: string;
 }

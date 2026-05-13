@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
-import { UnidadService } from './unidad.service';
-import { UnidadResolver } from './unidad.resolver';
+import { VideoResolver } from './video.resolver';
+import { VideoService } from './video.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AlumnoModule } from '../alumno/alumno.module';
 
 @Module({
   imports: [PrismaModule, AlumnoModule],
-  providers: [UnidadResolver, UnidadService],
+  providers: [VideoResolver, VideoService],
+  exports: [VideoService],
 })
-export class UnidadModule {}
+export class VideoModule {}

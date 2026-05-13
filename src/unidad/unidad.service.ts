@@ -11,16 +11,12 @@ export class UnidadService {
   findAll(tipoMateria?: TipoMateria) {
     return this.prisma.unidad.findMany({
       where: tipoMateria ? { tipoMateria } : undefined,
-      include: { contenidos: { orderBy: { orden: 'asc' } } },
-      orderBy: { id: 'asc' },
+      include: { contenidos: true },
     });
   }
 
   findOne(id: number) {
-    return this.prisma.unidad.findUnique({
-      where: { id },
-      include: { contenidos: true },
-    });
+    return this.prisma.unidad.findUnique({ where: { id }, include: { contenidos: true } });
   }
 
   create(createUnidadInput: CreateUnidadInput) {

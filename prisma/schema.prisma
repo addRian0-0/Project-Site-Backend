@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 1. TABLA CURSO 
 model Curso {
   id              String    @id
   nombre          String
@@ -23,35 +16,30 @@ model Curso {
   proposito       String?
   contenidos      String[]
   programaOficial String?
-
-  recursos        Recurso[] // Relación: Un curso tiene muchos recursos
+  recursos        Recurso[]
 }
 
-// 2. TABLA RECURSO 
 model Recurso {
-  id        Int     @id @default(autoincrement())
-  tipo      String  
-  titulo    String
-  url       String
-  duracion  String? 
-  tamano    String? 
-
-  cursoId   String
-  curso     Curso   @relation(fields: [cursoId], references: [id])
+  id       Int    @id @default(autoincrement())
+  tipo     String
+  titulo   String
+  url      String
+  duracion String?
+  tamano   String?
+  cursoId  String
+  curso    Curso  @relation(fields: [cursoId], references: [id])
 }
 
-// 3. TABLA ESTUDIANTE
 model Estudiante {
-  id        Int     @id @default(autoincrement())
+  id        Int    @id @default(autoincrement())
   nombre    String
-  matricula String  @unique
+  matricula String @unique
   programa  String
   foto      String?
 }
 
-// 4. TABLA INSIGNIA
 model Insignia {
-  id          Int     @id @default(autoincrement())
+  id          Int    @id @default(autoincrement())
   nombre      String
   nivel       String
   descripcion String
@@ -63,32 +51,62 @@ model Insignia {
 model Alumno {
   id       Int    @id @default(autoincrement())
   nombre   String
-  apellido String @default("")
-  email    String @unique
-  grupo    String @default("")
-  password String @default("")
+  apellido String  @default("")
+  email    String  @unique
+  grupo    String  @default("")
+  password String  @default("")
+  rol      String  @default("ALUMNO")
+  estado   String  @default("ACTIVO")
 }
 
-// 5. TABLA UNIDAD 
 model Unidad {
-  id          Int         @id @default(autoincrement())
-  nombre      String
-  contenidos  Contenido[] 
+  id         Int         @id @default(autoincrement())
+  nombre     String
+  contenidos Contenido[]
 }
 
-// 6. TABLA CONTENIDO
 model Contenido {
+  id           Int           @id @default(autoincrement())
+  titulo       String
+  descripcion  String
+  tipo         TipoContenido @default(LECCION)
+  tipoMateria  TipoMateria   @default(TEORIA_DE_LENGUAJES)
+  orden        Int
+  url_recurso  String?
+  contenido    String[]
+  unidadId     Int
+  unidad       Unidad        @relation(fields: [unidadId], references: [id])
+  videos       Video[]
+  asignaciones Asignacion[]
+}
+
+model Video {
   id          Int           @id @default(autoincrement())
   titulo      String
-  descripcion String
-  tipo        TipoContenido @default(LECCION)
-  tipoMateria TipoMateria   @default(TEORIA_DE_LENGUAJES)
-  orden       Int
-  url_recurso String?       
-  contenido   String[]      
+  descripcion String        @default("")
+  youtubeUrl  String
+  youtubeId   String
+  tipos       TipoVideo[]
+  publicado   Boolean       @default(true)
+  contenidoId Int?
+  contenido   Contenido?    @relation(fields: [contenidoId], references: [id])
+  asignaciones Asignacion[]
+}
 
-  unidadId    Int
-  unidad      Unidad        @relation(fields: [unidadId], references: [id])
+model Asignacion {
+  id          Int       @id @default(autoincrement())
+  titulo      String
+  descripcion String    @default("")
+  porcentaje  Int       @default(0)
+  periodo     Int
+  grupo       String    @default("")
+  entregable  Boolean   @default(true)
+  rubrica     String    @default("")
+  orden       Int       @default(0)
+  activa      Boolean   @default(true)
+  contenidoId Int?
+  contenido   Contenido? @relation(fields: [contenidoId], references: [id])
+  videos      Video[]
 }
 
 enum TipoContenido {
@@ -103,9 +121,14 @@ enum TipoMateria {
   TEORIA_DE_LENGUAJES
 }
 
-// 7. TABLA RUBRICA
+enum TipoVideo {
+  APRENDIZAJE
+  ACTIVIDAD
+  OTRO
+}
+
 model Rubrica {
-  id        Int      @id @default(autoincrement())
+  id        Int    @id @default(autoincrement())
   titulo    String
   criterios String
   url       String

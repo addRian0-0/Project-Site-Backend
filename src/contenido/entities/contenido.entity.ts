@@ -1,5 +1,7 @@
-import { ObjectType, Field, Int, ID, registerEnumType } from '@nestjs/graphql';
+import { Field, ID, Int, ObjectType, registerEnumType } from '@nestjs/graphql';
 import { Unidad } from '../../unidad/entities/unidad.entity';
+import { Asignacion } from '../../asignacion/entities/asignacion.entity';
+import { Video } from '../../video/entities/video.entity';
 
 export enum TipoContenido {
   LECCION = 'LECCION',
@@ -13,13 +15,8 @@ export enum TipoMateria {
   TEORIA_DE_LENGUAJES = 'TEORIA_DE_LENGUAJES',
 }
 
-registerEnumType(TipoContenido, {
-  name: 'TipoContenido',
-});
-
-registerEnumType(TipoMateria, {
-  name: 'TipoMateria',
-});
+registerEnumType(TipoContenido, { name: 'TipoContenido' });
+registerEnumType(TipoMateria, { name: 'TipoMateria' });
 
 @ObjectType()
 export class Contenido {
@@ -32,8 +29,8 @@ export class Contenido {
   @Field()
   descripcion: string;
 
-  @Field(() => TipoContenido, { nullable: true })
-  tipo?: TipoContenido;
+  @Field(() => TipoContenido)
+  tipo: TipoContenido;
 
   @Field(() => TipoMateria)
   tipoMateria: TipoMateria;
@@ -52,4 +49,10 @@ export class Contenido {
 
   @Field(() => Unidad, { nullable: true })
   unidad?: Unidad;
+
+  @Field(() => [Video], { nullable: true })
+  videos?: Video[];
+
+  @Field(() => [Asignacion], { nullable: true })
+  asignaciones?: Asignacion[];
 }

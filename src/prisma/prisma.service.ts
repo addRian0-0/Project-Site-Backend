@@ -1,6 +1,8 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { existsSync, readFileSync } from 'fs';
 import { URL } from 'url';
+import { hashPassword } from '../auth/auth.utils';
+import { EstadoUsuario, RolUsuario } from '../alumno/entities/alumno.entity';
 
 const { Pool } = require('pg');
 
@@ -14,15 +16,14 @@ type QueryArgs = {
 @Injectable()
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
   private readonly databaseUrl = this.getDatabaseUrl();
-
-  private readonly pool = new Pool({
-    connectionString: this.databaseUrl,
-  });
+  private readonly pool = new Pool({ connectionString: this.databaseUrl });
 
   readonly contenido = {
-    findMany: async (args?: QueryArgs) => this.findContenidosByTipoMateria(args?.where?.tipoMateria),
-    findUnique: async ({ where }: QueryArgs) =>
-      this.findContenidoById(Number(where?.id)),
+    findMany: async (args?: QueryArgs) => this.findContenidosByFilters(args?.where),
+    findUnique: async ({ where }: QueryArgs) => this.findContenidoById(Number(where?.id)),
+    create: async ({ data }: QueryArgs) => this.createContenido(data),
+    update: async ({ where, data }: QueryArgs) => this.updateContenido(Number(where?.id), data),
+    delete: async ({ where }: QueryArgs) => this.deleteContenido(Number(where?.id)),
   };
 
   readonly unidad = {
@@ -30,42 +31,49 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     findUnique: async ({ where, include }: QueryArgs) =>
       this.findUnidadById(Number(where?.id), Boolean(include?.contenidos)),
     create: async ({ data }: QueryArgs) => this.createUnidad(data),
-    update: async ({ where, data }: QueryArgs) =>
-      this.updateUnidad(Number(where?.id), data),
+    update: async ({ where, data }: QueryArgs) => this.updateUnidad(Number(where?.id), data),
     delete: async ({ where }: QueryArgs) => this.deleteUnidad(Number(where?.id)),
   };
 
   readonly alumno = {
-    findMany: async () =>
-      this.queryRows(
-        'SELECT id, nombre, apellido, email, grupo, password FROM "Alumno" ORDER BY id ASC',
-      ),
+    findMany: async () => this.findUsuarios(),
     findUnique: async ({ where }: QueryArgs) => {
       if (where?.email) {
         return this.queryOne(
-          'SELECT id, nombre, apellido, email, grupo, password FROM "Alumno" WHERE email = $1',
-          [where.email],
+          'SELECT id, nombre, apellido, email, grupo, password, rol, estado FROM "Alumno" WHERE email = $1',
+          [String(where.email)],
         );
       }
 
       if (where?.id) {
         return this.queryOne(
-          'SELECT id, nombre, apellido, email, grupo, password FROM "Alumno" WHERE id = $1',
-          [where.id],
+          'SELECT id, nombre, apellido, email, grupo, password, rol, estado FROM "Alumno" WHERE id = $1',
+          [Number(where.id)],
         );
       }
 
       return null;
     },
-    create: async ({ data }: QueryArgs) =>
-      this.queryOne(
-        `
-          INSERT INTO "Alumno" (nombre, apellido, email, grupo, password)
-          VALUES ($1, $2, $3, $4, $5)
-          RETURNING id, nombre, apellido, email, grupo, password
-        `,
-        [data?.nombre, data?.apellido, data?.email, data?.grupo, data?.password],
-      ),
+    create: async ({ data }: QueryArgs) => this.createUsuario(data),
+    update: async ({ where, data }: QueryArgs) => this.updateUsuario(Number(where?.id), data),
+    delete: async ({ where }: QueryArgs) => this.deleteUsuario(Number(where?.id)),
+    findGroups: async () => this.findGroups(),
+  };
+
+  readonly asignacion = {
+    findMany: async (args?: QueryArgs) => this.findAsignaciones(args?.where),
+    findUnique: async ({ where }: QueryArgs) => this.findAsignacionById(Number(where?.id)),
+    create: async ({ data }: QueryArgs) => this.createAsignacion(data),
+    update: async ({ where, data }: QueryArgs) => this.updateAsignacion(Number(where?.id), data),
+    delete: async ({ where }: QueryArgs) => this.deleteAsignacion(Number(where?.id)),
+  };
+
+  readonly video = {
+    findMany: async (args?: QueryArgs) => this.findVideos(args?.where),
+    findUnique: async ({ where }: QueryArgs) => this.findVideoById(Number(where?.id)),
+    create: async ({ data }: QueryArgs) => this.createVideo(data),
+    update: async ({ where, data }: QueryArgs) => this.updateVideo(Number(where?.id), data),
+    delete: async ({ where }: QueryArgs) => this.deleteVideo(Number(where?.id)),
   };
 
   readonly insignia = {
@@ -84,7 +92,8 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   };
 
   async onModuleInit() {
-    await this.ensureAlumnoSchema();
+    await this.ensureCoreSchema();
+    await this.ensureDefaultUsuarios();
     await this.pool.query('SELECT 1');
   }
 
@@ -92,47 +101,169 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     await this.pool.end();
   }
 
-  private async findContenidos() {
-    return this.findContenidosByTipoMateria();
+  private async findUsuarios() {
+    return this.queryRows(
+      'SELECT id, nombre, apellido, email, grupo, password, rol, estado FROM "Alumno" ORDER BY id ASC',
+    );
   }
 
-  private async findContenidosByTipoMateria(tipoMateria?: unknown) {
-    const whereClause = typeof tipoMateria === 'string' ? 'WHERE "tipoMateria" = $1' : '';
-    const params = typeof tipoMateria === 'string' ? [tipoMateria] : [];
+  private async findGroups() {
+    const rows = await this.queryRows(
+      "SELECT DISTINCT grupo FROM \"Alumno\" WHERE grupo IS NOT NULL AND grupo <> '' ORDER BY grupo ASC",
+    );
+    return rows.map((row) => row.grupo);
+  }
 
-    return this.queryRows(`
-      SELECT
-        id,
-        titulo,
-        descripcion,
-        tipo,
-        "tipoMateria",
-        orden,
-        url_recurso,
-        contenido,
-        "unidadId"
-      FROM "Contenido"
-      ${whereClause}
-      ORDER BY "unidadId" ASC, orden ASC, id ASC
-    `, params);
+  private async createUsuario(data?: any) {
+    return this.queryOne(
+      `
+        INSERT INTO "Alumno" (nombre, apellido, email, grupo, password, rol, estado)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, nombre, apellido, email, grupo, password, rol, estado
+      `,
+      [
+        data?.nombre,
+        data?.apellido,
+        data?.email,
+        data?.grupo ?? '',
+        data?.password,
+        data?.rol ?? RolUsuario.ALUMNO,
+        data?.estado ?? EstadoUsuario.ACTIVO,
+      ],
+    );
+  }
+
+  private async updateUsuario(id: number, data?: any) {
+    return this.updateRow(
+      '"Alumno"',
+      id,
+      {
+        nombre: data?.nombre,
+        apellido: data?.apellido,
+        email: data?.email,
+        grupo: data?.grupo,
+        password: data?.password,
+        rol: data?.rol,
+        estado: data?.estado,
+      },
+      'RETURNING id, nombre, apellido, email, grupo, password, rol, estado',
+    );
+  }
+
+  private async deleteUsuario(id: number) {
+    return this.queryOne(
+      'DELETE FROM "Alumno" WHERE id = $1 RETURNING id, nombre, apellido, email, grupo, password, rol, estado',
+      [id],
+    );
+  }
+
+  private async findContenidosByFilters(where?: Record<string, unknown>) {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+
+    if (typeof where?.tipoMateria === 'string') {
+      params.push(where.tipoMateria);
+      clauses.push(`"tipoMateria" = $${params.length}`);
+    }
+
+    if (typeof where?.unidadId === 'number') {
+      params.push(where.unidadId);
+      clauses.push(`"unidadId" = $${params.length}`);
+    }
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = await this.queryRows(
+      `
+        SELECT id, titulo, descripcion, tipo, "tipoMateria", orden, url_recurso, contenido, "unidadId"
+        FROM "Contenido"
+        ${whereClause}
+        ORDER BY "unidadId" ASC, orden ASC, id ASC
+      `,
+      params,
+    );
+
+    return this.attachContenidoRelations(rows);
   }
 
   private async findContenidoById(id: number) {
-    return this.queryOne(
+    const row = await this.queryOne(
       `
-        SELECT
-          id,
-          titulo,
-          descripcion,
-          tipo,
-          "tipoMateria",
-          orden,
-          url_recurso,
-          contenido,
-          "unidadId"
+        SELECT id, titulo, descripcion, tipo, "tipoMateria", orden, url_recurso, contenido, "unidadId"
         FROM "Contenido"
         WHERE id = $1
       `,
+      [id],
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    const [contenido] = await this.attachContenidoRelations([row]);
+    return contenido ?? null;
+  }
+
+  private async createContenido(data?: any) {
+    const row = await this.queryOne(
+      `
+        INSERT INTO "Contenido" (titulo, descripcion, tipo, "tipoMateria", orden, url_recurso, contenido, "unidadId")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, titulo, descripcion, tipo, "tipoMateria", orden, url_recurso, contenido, "unidadId"
+      `,
+      [
+        data?.titulo,
+        data?.descripcion,
+        data?.tipo,
+        data?.tipoMateria,
+        data?.orden,
+        data?.url_recurso ?? null,
+        data?.contenido ?? [],
+        data?.unidadId,
+      ],
+    );
+
+    const [contenido] = await this.attachContenidoRelations([row]);
+    return contenido;
+  }
+
+  private async updateContenido(id: number, data?: any) {
+    const row = await this.updateRow(
+      '"Contenido"',
+      id,
+      {
+        titulo: data?.titulo,
+        descripcion: data?.descripcion,
+        tipo: data?.tipo,
+        '"tipoMateria"': data?.tipoMateria,
+        orden: data?.orden,
+        url_recurso: data?.url_recurso,
+        contenido: data?.contenido,
+        '"unidadId"': data?.unidadId,
+      },
+      'RETURNING id, titulo, descripcion, tipo, "tipoMateria", orden, url_recurso, contenido, "unidadId"',
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    const [contenido] = await this.attachContenidoRelations([row]);
+    return contenido;
+  }
+
+  private async deleteContenido(id: number) {
+    await this.queryRows(
+      'DELETE FROM "_AsignacionToVideo" WHERE "A" IN (SELECT id FROM "Asignacion" WHERE "contenidoId" = $1)',
+      [id],
+    );
+    await this.queryRows(
+      'DELETE FROM "_AsignacionToVideo" WHERE "B" IN (SELECT id FROM "Video" WHERE "contenidoId" = $1)',
+      [id],
+    );
+    await this.queryRows('DELETE FROM "Asignacion" WHERE "contenidoId" = $1', [id]);
+    await this.queryRows('DELETE FROM "Video" WHERE "contenidoId" = $1', [id]);
+    return this.queryOne(
+      'DELETE FROM "Contenido" WHERE id = $1 RETURNING id, titulo, descripcion, tipo, "tipoMateria", orden, url_recurso, contenido, "unidadId"',
       [id],
     );
   }
@@ -157,64 +288,386 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       return unidades;
     }
 
-    const contenidos = await this.findContenidosByTipoMateria(tipoMateria);
+    const contenidos = await this.findContenidosByFilters(
+      typeof tipoMateria === 'string' ? { tipoMateria } : undefined,
+    );
+
     return unidades.map((unidad) => ({
       ...unidad,
       contenidos: contenidos
         .filter((contenido) => contenido.unidadId === unidad.id)
-        .map((contenido) => ({
-          ...contenido,
-          unidad,
-        })),
+        .map((contenido) => ({ ...contenido, unidad })),
     }));
   }
 
   private async findUnidadById(id: number, includeContenidos: boolean) {
-    const unidad = await this.queryOne('SELECT id, nombre FROM "Unidad" WHERE id = $1', [
-      id,
-    ]);
-
+    const unidad = await this.queryOne('SELECT id, nombre FROM "Unidad" WHERE id = $1', [id]);
     if (!unidad || !includeContenidos) {
       return unidad;
     }
 
-    const contenidos = await this.queryRows(
-      `
-        SELECT
-          id,
-          titulo,
-          descripcion,
-          tipo,
-          "tipoMateria",
-          orden,
-          url_recurso,
-          contenido,
-          "unidadId"
-        FROM "Contenido"
-        WHERE "unidadId" = $1
-        ORDER BY orden ASC, id ASC
-      `,
-      [id],
-    );
-
-    return { ...unidad, contenidos };
+    const contenidos = await this.findContenidosByFilters({ unidadId: id });
+    return { ...unidad, contenidos: contenidos.map((contenido) => ({ ...contenido, unidad })) };
   }
 
   private async createUnidad(data?: any) {
-    return this.queryOne('INSERT INTO "Unidad" (nombre) VALUES ($1) RETURNING id, nombre', [
-      data?.nombre,
-    ]);
+    return this.queryOne('INSERT INTO "Unidad" (nombre) VALUES ($1) RETURNING id, nombre', [data?.nombre]);
   }
 
   private async updateUnidad(id: number, data?: any) {
-    return this.queryOne(
-      'UPDATE "Unidad" SET nombre = COALESCE($1, nombre) WHERE id = $2 RETURNING id, nombre',
-      [data?.nombre, id],
-    );
+    return this.updateRow('"Unidad"', id, { nombre: data?.nombre }, 'RETURNING id, nombre');
   }
 
   private async deleteUnidad(id: number) {
     return this.queryOne('DELETE FROM "Unidad" WHERE id = $1 RETURNING id, nombre', [id]);
+  }
+
+  private async findAsignaciones(where?: Record<string, unknown>) {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+
+    if (typeof where?.periodo === 'number') {
+      params.push(where.periodo);
+      clauses.push(`periodo = $${params.length}`);
+    }
+
+    if (typeof where?.contenidoId === 'number') {
+      params.push(where.contenidoId);
+      clauses.push(`"contenidoId" = $${params.length}`);
+    }
+
+    if (typeof where?.grupo === 'string' && where.grupo.trim()) {
+      params.push(where.grupo.trim());
+      clauses.push(`(grupo = '' OR grupo = $${params.length})`);
+    }
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = await this.queryRows(
+      `
+        SELECT id, titulo, descripcion, porcentaje, periodo, grupo, entregable, rubrica, orden, activa, "contenidoId"
+        FROM "Asignacion"
+        ${whereClause}
+        ORDER BY periodo ASC, orden ASC, id ASC
+      `,
+      params,
+    );
+
+    return this.attachAsignacionRelations(rows);
+  }
+
+  private async findAsignacionById(id: number) {
+    const row = await this.queryOne(
+      `
+        SELECT id, titulo, descripcion, porcentaje, periodo, grupo, entregable, rubrica, orden, activa, "contenidoId"
+        FROM "Asignacion"
+        WHERE id = $1
+      `,
+      [id],
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    const [asignacion] = await this.attachAsignacionRelations([row]);
+    return asignacion ?? null;
+  }
+
+  private async createAsignacion(data?: any) {
+    const row = await this.queryOne(
+      `
+        INSERT INTO "Asignacion" (titulo, descripcion, porcentaje, periodo, grupo, entregable, rubrica, orden, activa, "contenidoId")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING id, titulo, descripcion, porcentaje, periodo, grupo, entregable, rubrica, orden, activa, "contenidoId"
+      `,
+      [
+        data?.titulo,
+        data?.descripcion ?? '',
+        data?.porcentaje ?? 0,
+        data?.periodo,
+        data?.grupo ?? '',
+        data?.entregable ?? true,
+        data?.rubrica ?? '',
+        data?.orden ?? 0,
+        data?.activa ?? true,
+        data?.contenidoId ?? null,
+      ],
+    );
+
+    await this.syncAsignacionVideos(row.id, data?.videoIds ?? []);
+    return this.findAsignacionById(row.id);
+  }
+
+  private async updateAsignacion(id: number, data?: any) {
+    const row = await this.updateRow(
+      '"Asignacion"',
+      id,
+      {
+        titulo: data?.titulo,
+        descripcion: data?.descripcion,
+        porcentaje: data?.porcentaje,
+        periodo: data?.periodo,
+        grupo: data?.grupo,
+        entregable: data?.entregable,
+        rubrica: data?.rubrica,
+        orden: data?.orden,
+        activa: data?.activa,
+        '"contenidoId"': data?.contenidoId,
+      },
+      'RETURNING id, titulo, descripcion, porcentaje, periodo, grupo, entregable, rubrica, orden, activa, "contenidoId"',
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    if (Array.isArray(data?.videoIds)) {
+      await this.syncAsignacionVideos(id, data.videoIds);
+    }
+
+    return this.findAsignacionById(id);
+  }
+
+  private async deleteAsignacion(id: number) {
+    await this.queryRows('DELETE FROM "_AsignacionToVideo" WHERE "A" = $1', [id]);
+    return this.queryOne(
+      'DELETE FROM "Asignacion" WHERE id = $1 RETURNING id, titulo, descripcion, porcentaje, periodo, grupo, entregable, rubrica, orden, activa, "contenidoId"',
+      [id],
+    );
+  }
+
+  private async findVideos(where?: Record<string, unknown>) {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    let joinClause = '';
+
+    if (typeof where?.contenidoId === 'number') {
+      params.push(where.contenidoId);
+      clauses.push(`v."contenidoId" = $${params.length}`);
+    }
+
+    if (typeof where?.asignacionId === 'number') {
+      joinClause = 'LEFT JOIN "_AsignacionToVideo" av ON av."B" = v.id';
+      params.push(where.asignacionId);
+      clauses.push(`av."A" = $${params.length}`);
+    }
+
+    if (typeof where?.publicado === 'boolean') {
+      params.push(where.publicado);
+      clauses.push(`v.publicado = $${params.length}`);
+    }
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+
+    const rows = await this.queryRows(
+      `
+        SELECT DISTINCT v.id, v.titulo, v.descripcion, v."youtubeUrl", v."youtubeId", v.tipos, v.publicado, v."contenidoId"
+        FROM "Video" v
+        ${joinClause}
+        ${whereClause}
+        ORDER BY v.id DESC
+      `,
+      params,
+    );
+
+    return this.attachVideoRelations(rows);
+  }
+
+  private async findVideoById(id: number) {
+    const row = await this.queryOne(
+      `
+        SELECT id, titulo, descripcion, "youtubeUrl", "youtubeId", tipos, publicado, "contenidoId"
+        FROM "Video"
+        WHERE id = $1
+      `,
+      [id],
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    const [video] = await this.attachVideoRelations([row]);
+    return video ?? null;
+  }
+
+  private async createVideo(data?: any) {
+    const youtubeId = this.extractYoutubeId(data?.youtubeUrl);
+    const row = await this.queryOne(
+      `
+        INSERT INTO "Video" (titulo, descripcion, "youtubeUrl", "youtubeId", tipos, publicado, "contenidoId")
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, titulo, descripcion, "youtubeUrl", "youtubeId", tipos, publicado, "contenidoId"
+      `,
+      [
+        data?.titulo,
+        data?.descripcion ?? '',
+        data?.youtubeUrl,
+        youtubeId,
+        data?.tipos ?? [],
+        data?.publicado ?? true,
+        data?.contenidoId ?? null,
+      ],
+    );
+
+    await this.syncVideoAsignaciones(row.id, data?.asignacionIds ?? []);
+    return this.findVideoById(row.id);
+  }
+
+  private async updateVideo(id: number, data?: any) {
+    const row = await this.updateRow(
+      '"Video"',
+      id,
+      {
+        titulo: data?.titulo,
+        descripcion: data?.descripcion,
+        '"youtubeUrl"': data?.youtubeUrl,
+        '"youtubeId"': data?.youtubeUrl ? this.extractYoutubeId(data.youtubeUrl) : undefined,
+        tipos: data?.tipos,
+        publicado: data?.publicado,
+        '"contenidoId"': data?.contenidoId,
+      },
+      'RETURNING id, titulo, descripcion, "youtubeUrl", "youtubeId", tipos, publicado, "contenidoId"',
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    if (Array.isArray(data?.asignacionIds)) {
+      await this.syncVideoAsignaciones(id, data.asignacionIds);
+    }
+
+    return this.findVideoById(id);
+  }
+
+  private async deleteVideo(id: number) {
+    await this.queryRows('DELETE FROM "_AsignacionToVideo" WHERE "B" = $1', [id]);
+    return this.queryOne(
+      'DELETE FROM "Video" WHERE id = $1 RETURNING id, titulo, descripcion, "youtubeUrl", "youtubeId", tipos, publicado, "contenidoId"',
+      [id],
+    );
+  }
+
+  private async attachContenidoRelations(rows: any[]) {
+    if (!rows.length) {
+      return [];
+    }
+
+    const unidadIds = [...new Set(rows.map((row) => row.unidadId))];
+    const unidades = unidadIds.length
+      ? await this.queryRows('SELECT id, nombre FROM "Unidad" WHERE id = ANY($1::int[])', [unidadIds])
+      : [];
+    const unidadMap = new Map(unidades.map((unidad) => [unidad.id, unidad]));
+    const allVideos = await this.findVideos({});
+    const allAsignaciones = await this.findAsignaciones({});
+
+    return rows.map((row) => ({
+      ...row,
+      unidad: unidadMap.get(row.unidadId) ?? null,
+      videos: allVideos.filter((video) => video.contenidoId === row.id),
+      asignaciones: allAsignaciones.filter((asignacion) => asignacion.contenidoId === row.id),
+      contenido: row.contenido ?? [],
+    }));
+  }
+
+  private async attachAsignacionRelations(rows: any[]) {
+    if (!rows.length) {
+      return [];
+    }
+
+    const ids = rows.map((row) => row.id);
+    const links = await this.queryRows(
+      'SELECT "A" AS "asignacionId", "B" AS "videoId" FROM "_AsignacionToVideo" WHERE "A" = ANY($1::int[])',
+      [ids],
+    );
+    const videoIds = [...new Set(links.map((link) => link.videoId))];
+    const videos = videoIds.length
+      ? await this.queryRows(
+          'SELECT id, titulo, descripcion, "youtubeUrl", "youtubeId", tipos, publicado, "contenidoId" FROM "Video" WHERE id = ANY($1::int[]) ORDER BY id DESC',
+          [videoIds],
+        )
+      : [];
+    const videoMap = new Map(videos.map((video) => [video.id, video]));
+
+    return rows.map((row) => ({
+      ...row,
+      videos: links
+        .filter((link) => link.asignacionId === row.id)
+        .map((link) => videoMap.get(link.videoId))
+        .filter(Boolean),
+    }));
+  }
+
+  private async attachVideoRelations(rows: any[]) {
+    if (!rows.length) {
+      return [];
+    }
+
+    const ids = rows.map((row) => row.id);
+    const links = await this.queryRows(
+      'SELECT "A" AS "asignacionId", "B" AS "videoId" FROM "_AsignacionToVideo" WHERE "B" = ANY($1::int[])',
+      [ids],
+    );
+    const asignacionIds = [...new Set(links.map((link) => link.asignacionId))];
+    const asignaciones = asignacionIds.length
+      ? await this.queryRows(
+          'SELECT id, titulo, descripcion, porcentaje, periodo, grupo, entregable, rubrica, orden, activa, "contenidoId" FROM "Asignacion" WHERE id = ANY($1::int[]) ORDER BY periodo ASC, orden ASC, id ASC',
+          [asignacionIds],
+        )
+      : [];
+    const asignacionMap = new Map(asignaciones.map((asignacion) => [asignacion.id, asignacion]));
+
+    return rows.map((row) => ({
+      ...row,
+      tipos: row.tipos ?? [],
+      asignaciones: links
+        .filter((link) => link.videoId === row.id)
+        .map((link) => asignacionMap.get(link.asignacionId))
+        .filter(Boolean),
+    }));
+  }
+
+  private async syncAsignacionVideos(asignacionId: number, videoIds: number[]) {
+    await this.queryRows('DELETE FROM "_AsignacionToVideo" WHERE "A" = $1', [asignacionId]);
+    for (const videoId of [...new Set(videoIds)]) {
+      await this.queryRows(
+        'INSERT INTO "_AsignacionToVideo" ("A", "B") VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [asignacionId, videoId],
+      );
+    }
+  }
+
+  private async syncVideoAsignaciones(videoId: number, asignacionIds: number[]) {
+    await this.queryRows('DELETE FROM "_AsignacionToVideo" WHERE "B" = $1', [videoId]);
+    for (const asignacionId of [...new Set(asignacionIds)]) {
+      await this.queryRows(
+        'INSERT INTO "_AsignacionToVideo" ("A", "B") VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [asignacionId, videoId],
+      );
+    }
+  }
+
+  private async updateRow(tableName: string, id: number, data: Record<string, unknown>, returning: string) {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    Object.entries(data).forEach(([column, value]) => {
+      if (value !== undefined) {
+        params.push(value);
+        sets.push(`${column} = $${params.length}`);
+      }
+    });
+
+    if (!sets.length) {
+      return this.queryOne(`SELECT * FROM ${tableName} WHERE id = $1`, [id]);
+    }
+
+    params.push(id);
+    return this.queryOne(
+      `UPDATE ${tableName} SET ${sets.join(', ')} WHERE id = $${params.length} ${returning}`,
+      params,
+    );
   }
 
   private async queryRows(sql: string, params: unknown[] = []) {
@@ -225,6 +678,19 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   private async queryOne(sql: string, params: unknown[] = []) {
     const result = await this.pool.query(sql, params);
     return result.rows[0] ?? null;
+  }
+
+  private extractYoutubeId(url: string) {
+    const trimmed = url?.trim() ?? '';
+    const match = trimmed.match(
+      /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/,
+    );
+
+    if (!match) {
+      throw new Error('La URL de YouTube no es valida');
+    }
+
+    return match[1];
   }
 
   private getDatabaseUrl() {
@@ -311,12 +777,103 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async ensureAlumnoSchema() {
+  private async ensureCoreSchema() {
     await this.pool.query(`
       ALTER TABLE "Alumno"
       ADD COLUMN IF NOT EXISTS apellido TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS grupo TEXT NOT NULL DEFAULT '',
-      ADD COLUMN IF NOT EXISTS password TEXT NOT NULL DEFAULT ''
+      ADD COLUMN IF NOT EXISTS password TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'ALUMNO',
+      ADD COLUMN IF NOT EXISTS estado TEXT NOT NULL DEFAULT 'ACTIVO'
     `);
+
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "Video" (
+        id SERIAL PRIMARY KEY,
+        titulo TEXT NOT NULL,
+        descripcion TEXT NOT NULL DEFAULT '',
+        "youtubeUrl" TEXT NOT NULL,
+        "youtubeId" TEXT NOT NULL,
+        tipos TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+        publicado BOOLEAN NOT NULL DEFAULT TRUE,
+        "contenidoId" INTEGER REFERENCES "Contenido"(id) ON DELETE SET NULL
+      )
+    `);
+
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "Asignacion" (
+        id SERIAL PRIMARY KEY,
+        titulo TEXT NOT NULL,
+        descripcion TEXT NOT NULL DEFAULT '',
+        porcentaje INTEGER NOT NULL DEFAULT 0,
+        periodo INTEGER NOT NULL,
+        grupo TEXT NOT NULL DEFAULT '',
+        entregable BOOLEAN NOT NULL DEFAULT TRUE,
+        rubrica TEXT NOT NULL DEFAULT '',
+        orden INTEGER NOT NULL DEFAULT 0,
+        activa BOOLEAN NOT NULL DEFAULT TRUE,
+        "contenidoId" INTEGER REFERENCES "Contenido"(id) ON DELETE SET NULL
+      )
+    `);
+
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "_AsignacionToVideo" (
+        "A" INTEGER NOT NULL REFERENCES "Asignacion"(id) ON DELETE CASCADE,
+        "B" INTEGER NOT NULL REFERENCES "Video"(id) ON DELETE CASCADE,
+        PRIMARY KEY ("A", "B")
+      )
+    `);
+  }
+
+  private async ensureDefaultUsuarios() {
+    const admin = {
+      nombre: 'Administrador',
+      apellido: 'Sistema',
+      email: process.env.DEFAULT_ADMIN_EMAIL?.trim() ?? 'admin@ipn.mx',
+      grupo: '',
+      password: process.env.DEFAULT_ADMIN_PASSWORD?.trim() ?? 'Admin123!',
+      rol: RolUsuario.ADMINISTRADOR,
+      estado: EstadoUsuario.ACTIVO,
+    };
+
+    const moderadores = [
+      {
+        nombre: 'Moderador',
+        apellido: 'Academico Uno',
+        email: process.env.DEFAULT_MODERATOR_1_EMAIL?.trim() ?? 'moderador1@ipn.mx',
+        grupo: '',
+        password: process.env.DEFAULT_MODERATOR_1_PASSWORD?.trim() ?? 'Moderador123!',
+        rol: RolUsuario.MODERADOR,
+        estado: EstadoUsuario.ACTIVO,
+      },
+      {
+        nombre: 'Moderador',
+        apellido: 'Academico Dos',
+        email: process.env.DEFAULT_MODERATOR_2_EMAIL?.trim() ?? 'moderador2@ipn.mx',
+        grupo: '',
+        password: process.env.DEFAULT_MODERATOR_2_PASSWORD?.trim() ?? 'Moderador123!',
+        rol: RolUsuario.MODERADOR,
+        estado: EstadoUsuario.ACTIVO,
+      },
+      {
+        nombre: 'Moderador',
+        apellido: 'Academico Tres',
+        email: process.env.DEFAULT_MODERATOR_3_EMAIL?.trim() ?? 'moderador3@ipn.mx',
+        grupo: '',
+        password: process.env.DEFAULT_MODERATOR_3_PASSWORD?.trim() ?? 'Moderador123!',
+        rol: RolUsuario.MODERADOR,
+        estado: EstadoUsuario.ACTIVO,
+      },
+    ];
+
+    for (const usuario of [admin, ...moderadores]) {
+      const existente = await this.queryOne('SELECT id FROM "Alumno" WHERE email = $1', [usuario.email]);
+      if (!existente) {
+        await this.createUsuario({
+          ...usuario,
+          password: hashPassword(usuario.password),
+        });
+      }
+    }
   }
 }

@@ -2,27 +2,51 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
-"""Entidad que representa a un alumno del sistema"""
+"""Usuario autenticable del sistema"""
 type Alumno {
   apellido: String!
   contenidosCompletados: [Contenido!]
   email: String!
+  estado: EstadoUsuario!
   grupo: String!
   id: Int!
   nombre: String!
+  rol: RolUsuario!
+}
+
+type Asignacion {
+  activa: Boolean!
+  contenidoId: Int
+  descripcion: String!
+  entregable: Boolean!
+  grupo: String!
+  id: ID!
+  orden: Int!
+  periodo: Int!
+  porcentaje: Int!
+  rubrica: String!
+  titulo: String!
+  videos: [Video!]
+}
+
+type AuthPayload {
+  token: String!
+  usuario: Alumno!
 }
 
 type Contenido {
+  asignaciones: [Asignacion!]
   contenido: [String!]!
   descripcion: String!
   id: ID!
   orden: Int!
-  tipo: TipoContenido
+  tipo: TipoContenido!
   tipoMateria: TipoMateria!
   titulo: String!
   unidad: Unidad
   unidadId: Int!
   url_recurso: String
+  videos: [Video!]
 }
 
 input CreateAlumnoInput {
@@ -33,8 +57,58 @@ input CreateAlumnoInput {
   password: String!
 }
 
+input CreateAsignacionInput {
+  activa: Boolean! = true
+  contenidoId: Int
+  descripcion: String! = ""
+  entregable: Boolean! = true
+  grupo: String! = ""
+  orden: Int! = 0
+  periodo: Int!
+  porcentaje: Int! = 0
+  rubrica: String! = ""
+  titulo: String!
+  videoIds: [Int!]! = []
+}
+
+input CreateContenidoInput {
+  contenido: [String!]!
+  descripcion: String!
+  orden: Int!
+  tipo: TipoContenido!
+  tipoMateria: TipoMateria!
+  titulo: String!
+  unidadId: Int!
+  url_recurso: String
+}
+
 input CreateUnidadInput {
   nombre: String!
+}
+
+input CreateUsuarioInput {
+  apellido: String!
+  email: String!
+  estado: EstadoUsuario! = ACTIVO
+  grupo: String! = ""
+  nombre: String!
+  password: String!
+  rol: RolUsuario!
+}
+
+input CreateVideoInput {
+  asignacionIds: [Int!]! = []
+  contenidoId: Int
+  descripcion: String! = ""
+  publicado: Boolean! = true
+  tipos: [TipoVideo!]!
+  titulo: String!
+  youtubeUrl: String!
+}
+
+enum EstadoUsuario {
+  ACTIVO
+  INACTIVO
 }
 
 type Insignia {
@@ -50,22 +124,45 @@ input LoginAlumnoInput {
 }
 
 type Mutation {
+  actualizarAsignacion(datos: UpdateAsignacionInput!): Asignacion!
+  actualizarContenido(datos: UpdateContenidoInput!): Contenido!
+  actualizarUnidad(updateUnidadInput: UpdateUnidadInput!): Unidad!
+  actualizarUsuario(datos: UpdateUsuarioInput!): Alumno!
+  actualizarVideo(datos: UpdateVideoInput!): Video!
   completarContenido(alumnoId: Int!, contenidoId: Int!): Alumno
   crearAlumno(datos: CreateAlumnoInput!): Alumno!
-  createUnidad(createUnidadInput: CreateUnidadInput!): Unidad!
-  iniciarSesion(datos: LoginAlumnoInput!): Alumno!
-  removeUnidad(id: Int!): Unidad!
-  updateUnidad(updateUnidadInput: UpdateUnidadInput!): Unidad!
+  crearAsignacion(datos: CreateAsignacionInput!): Asignacion!
+  crearContenido(datos: CreateContenidoInput!): Contenido!
+  crearUnidad(createUnidadInput: CreateUnidadInput!): Unidad!
+  crearUsuario(datos: CreateUsuarioInput!): Alumno!
+  crearVideo(datos: CreateVideoInput!): Video!
+  eliminarAsignacion(id: Int!): Asignacion!
+  eliminarContenido(id: Int!): Contenido!
+  eliminarUnidad(id: Int!): Unidad!
+  eliminarUsuario(id: Int!): Alumno!
+  eliminarVideo(id: Int!): Video!
+  iniciarSesion(datos: LoginAlumnoInput!): AuthPayload!
 }
 
 type Query {
-  alumnos: [Alumno!]!
+  asignacion(id: Int!): Asignacion
+  asignaciones(contenidoId: Int, grupo: String, periodo: Int): [Asignacion!]!
   contenido(id: Int!): Contenido
   contenidos(tipoMateria: TipoMateria): [Contenido!]!
+  grupos: [String!]!
   insignias: [Insignia!]!
   rubricasPorPeriodo(periodo: Int!): [Rubrica!]!
   unidad(id: Int!): Unidad
   unidades(tipoMateria: TipoMateria): [Unidad!]!
+  usuarios: [Alumno!]!
+  video(id: Int!): Video
+  videos(asignacionId: Int, contenidoId: Int, publicado: Boolean): [Video!]!
+}
+
+enum RolUsuario {
+  ADMINISTRADOR
+  ALUMNO
+  MODERADOR
 }
 
 type Rubrica {
@@ -88,13 +185,80 @@ enum TipoMateria {
   TEORIA_DE_LENGUAJES
 }
 
+enum TipoVideo {
+  ACTIVIDAD
+  APRENDIZAJE
+  OTRO
+}
+
 type Unidad {
   contenidos: [Contenido!]
   id: Int!
   nombre: String!
 }
 
+input UpdateAsignacionInput {
+  activa: Boolean
+  contenidoId: Int
+  descripcion: String
+  entregable: Boolean
+  grupo: String
+  id: Int!
+  orden: Int
+  periodo: Int
+  porcentaje: Int
+  rubrica: String
+  titulo: String
+  videoIds: [Int!]
+}
+
+input UpdateContenidoInput {
+  contenido: [String!]
+  descripcion: String
+  id: Int!
+  orden: Int
+  tipo: TipoContenido
+  tipoMateria: TipoMateria
+  titulo: String
+  unidadId: Int
+  url_recurso: String
+}
+
 input UpdateUnidadInput {
   id: Int!
   nombre: String
+}
+
+input UpdateUsuarioInput {
+  apellido: String
+  email: String
+  estado: EstadoUsuario
+  grupo: String
+  id: Int!
+  nombre: String
+  password: String
+  rol: RolUsuario
+}
+
+input UpdateVideoInput {
+  asignacionIds: [Int!]
+  contenidoId: Int
+  descripcion: String
+  id: Int!
+  publicado: Boolean
+  tipos: [TipoVideo!]
+  titulo: String
+  youtubeUrl: String
+}
+
+type Video {
+  asignaciones: [Asignacion!]
+  contenidoId: Int
+  descripcion: String!
+  id: ID!
+  publicado: Boolean!
+  tipos: [TipoVideo!]!
+  titulo: String!
+  youtubeId: String!
+  youtubeUrl: String!
 }
