@@ -1,9 +1,0 @@
-node_modules
-dist
-coverage
-.git
-.gitignore
-.env
-.env.*
-*.log
-Proyecto_Backend_UPIICSA.zip
