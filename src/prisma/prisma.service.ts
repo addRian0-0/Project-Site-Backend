@@ -76,6 +76,18 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     delete: async ({ where }: QueryArgs) => this.deleteVideo(Number(where?.id)),
   };
 
+
+
+  readonly entrega = {
+    findMany: async (args?: QueryArgs) => this.findEntregas(args?.where),
+    upsert: async ({ data }: QueryArgs) => this.upsertEntrega(data),
+  };
+
+  readonly calificacionAsignacion = {
+    findMany: async (args?: QueryArgs) => this.findCalificacionesAsignacion(args?.where),
+    upsert: async ({ data }: QueryArgs) => this.upsertCalificacionAsignacion(data),
+  };
+
   readonly insignia = {
     findMany: async () =>
       this.queryRows(
@@ -670,6 +682,133 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+
+
+  private async findEntregas(where?: Record<string, unknown>) {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+
+    if (typeof where?.grupo === 'string' && where.grupo.trim()) {
+      params.push(where.grupo.trim());
+      clauses.push(`grupo = $${params.length}`);
+    }
+
+    if (typeof where?.parcial === 'number') {
+      params.push(where.parcial);
+      clauses.push(`parcial = $${params.length}`);
+    }
+
+    if (typeof where?.alumnoId === 'number') {
+      params.push(where.alumnoId);
+      clauses.push(`"alumnoId" = $${params.length}`);
+    }
+
+    if (typeof where?.asignacionId === 'number') {
+      params.push(where.asignacionId);
+      clauses.push(`"asignacionId" = $${params.length}`);
+    }
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    return this.queryRows(
+      `
+        SELECT id, "asignacionId", "alumnoId", grupo, parcial, "nombreArchivo", "mimeType", tamano, "archivoBase64", estado, "fechaEntrega"
+        FROM "Entrega"
+        ${whereClause}
+        ORDER BY "fechaEntrega" DESC, id DESC
+      `,
+      params,
+    );
+  }
+
+  private async upsertEntrega(data?: any) {
+    return this.queryOne(
+      `
+        INSERT INTO "Entrega" ("asignacionId", "alumnoId", grupo, parcial, "nombreArchivo", "mimeType", tamano, "archivoBase64", estado, "fechaEntrega")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'entregado', NOW())
+        ON CONFLICT ("asignacionId", "alumnoId", parcial)
+        DO UPDATE SET
+          grupo = EXCLUDED.grupo,
+          "nombreArchivo" = EXCLUDED."nombreArchivo",
+          "mimeType" = EXCLUDED."mimeType",
+          tamano = EXCLUDED.tamano,
+          "archivoBase64" = EXCLUDED."archivoBase64",
+          estado = 'entregado',
+          "fechaEntrega" = NOW()
+        RETURNING id, "asignacionId", "alumnoId", grupo, parcial, "nombreArchivo", "mimeType", tamano, "archivoBase64", estado, "fechaEntrega"
+      `,
+      [
+        data?.asignacionId,
+        data?.alumnoId,
+        data?.grupo ?? '',
+        data?.parcial,
+        data?.nombreArchivo,
+        data?.mimeType,
+        data?.tamano ?? 0,
+        data?.archivoBase64,
+      ],
+    );
+  }
+
+  private async findCalificacionesAsignacion(where?: Record<string, unknown>) {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+
+    if (typeof where?.grupo === 'string' && where.grupo.trim()) {
+      params.push(where.grupo.trim());
+      clauses.push(`grupo = $${params.length}`);
+    }
+
+    if (typeof where?.parcial === 'number') {
+      params.push(where.parcial);
+      clauses.push(`parcial = $${params.length}`);
+    }
+
+    if (typeof where?.alumnoId === 'number') {
+      params.push(where.alumnoId);
+      clauses.push(`"alumnoId" = $${params.length}`);
+    }
+
+    if (typeof where?.asignacionId === 'number') {
+      params.push(where.asignacionId);
+      clauses.push(`"asignacionId" = $${params.length}`);
+    }
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    return this.queryRows(
+      `
+        SELECT id, "asignacionId", "alumnoId", grupo, parcial, calificacion, observaciones, "fechaCalificacion"
+        FROM "CalificacionAsignacion"
+        ${whereClause}
+        ORDER BY "fechaCalificacion" DESC, id DESC
+      `,
+      params,
+    );
+  }
+
+  private async upsertCalificacionAsignacion(data?: any) {
+    return this.queryOne(
+      `
+        INSERT INTO "CalificacionAsignacion" ("asignacionId", "alumnoId", grupo, parcial, calificacion, observaciones, "fechaCalificacion")
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        ON CONFLICT ("asignacionId", "alumnoId", parcial)
+        DO UPDATE SET
+          grupo = EXCLUDED.grupo,
+          calificacion = EXCLUDED.calificacion,
+          observaciones = EXCLUDED.observaciones,
+          "fechaCalificacion" = NOW()
+        RETURNING id, "asignacionId", "alumnoId", grupo, parcial, calificacion, observaciones, "fechaCalificacion"
+      `,
+      [
+        data?.asignacionId,
+        data?.alumnoId,
+        data?.grupo ?? '',
+        data?.parcial,
+        data?.calificacion ?? 0,
+        data?.observaciones ?? '',
+      ],
+    );
+  }
+
   private async queryRows(sql: string, params: unknown[] = []) {
     const result = await this.pool.query(sql, params);
     return result.rows;
@@ -821,6 +960,37 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
         "A" INTEGER NOT NULL REFERENCES "Asignacion"(id) ON DELETE CASCADE,
         "B" INTEGER NOT NULL REFERENCES "Video"(id) ON DELETE CASCADE,
         PRIMARY KEY ("A", "B")
+      )
+    `);
+
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "Entrega" (
+        id SERIAL PRIMARY KEY,
+        "asignacionId" INTEGER NOT NULL REFERENCES "Asignacion"(id) ON DELETE CASCADE,
+        "alumnoId" INTEGER NOT NULL REFERENCES "Alumno"(id) ON DELETE CASCADE,
+        grupo TEXT NOT NULL DEFAULT '',
+        parcial INTEGER NOT NULL,
+        "nombreArchivo" TEXT NOT NULL,
+        "mimeType" TEXT NOT NULL DEFAULT 'application/octet-stream',
+        tamano INTEGER NOT NULL DEFAULT 0,
+        "archivoBase64" TEXT NOT NULL,
+        estado TEXT NOT NULL DEFAULT 'entregado',
+        "fechaEntrega" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("asignacionId", "alumnoId", parcial)
+      )
+    `);
+
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "CalificacionAsignacion" (
+        id SERIAL PRIMARY KEY,
+        "asignacionId" INTEGER NOT NULL REFERENCES "Asignacion"(id) ON DELETE CASCADE,
+        "alumnoId" INTEGER NOT NULL REFERENCES "Alumno"(id) ON DELETE CASCADE,
+        grupo TEXT NOT NULL DEFAULT '',
+        parcial INTEGER NOT NULL,
+        calificacion INTEGER NOT NULL DEFAULT 0,
+        observaciones TEXT NOT NULL DEFAULT '',
+        "fechaCalificacion" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("asignacionId", "alumnoId", parcial)
       )
     `);
   }

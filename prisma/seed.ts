@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-import { readFileSync } from 'fs';
+import { PrismaClient, TipoVideo } from '@prisma/client';
+import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 import * as vm from 'vm';
 
@@ -52,7 +52,16 @@ const UNIT_ID_OFFSET: Record<TipoMateriaValue, number> = {
 };
 
 function cargarMock(): MockContenido[] {
-  const mockPath = resolve(process.cwd(), '../compiladores/src/data/mockGuionDidactico.js');
+  const posiblesRutas = [
+    resolve(process.cwd(), '../Instruccional/src/data/mockGuionDidactico.js'),
+    resolve(process.cwd(), '../compiladores/src/data/mockGuionDidactico.js'),
+  ];
+  const mockPath = posiblesRutas.find((path) => existsSync(path));
+
+  if (!mockPath) {
+    throw new Error('No se encontró mockGuionDidactico.js en las rutas esperadas.');
+  }
+
   const rawSource = readFileSync(mockPath, 'utf8');
   const scriptSource = `
     const AreaComputacion = {
@@ -169,6 +178,127 @@ async function sembrarContenidos(
   });
 }
 
+async function sembrarVideosYAsignacionesDemo() {
+  await prisma.asignacion.deleteMany();
+  await prisma.video.deleteMany();
+
+  const contenidosDemo = await prisma.contenido.findMany({
+    where: {
+      tipoMateria: {
+        in: [TIPO_MATERIA.TEORIA_DE_LA_COMPUTACION, TIPO_MATERIA.COMPILADORES],
+      },
+    },
+    orderBy: [{ tipoMateria: 'asc' }, { unidadId: 'asc' }, { orden: 'asc' }],
+    take: 6,
+  });
+
+  if (contenidosDemo.length === 0) {
+    return;
+  }
+
+  const registros = [
+    {
+      contenido: contenidosDemo[0],
+      video: {
+        titulo: 'Introducción guiada al tema',
+        descripcion: 'Video de aprendizaje para iniciar la unidad.',
+        youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        youtubeId: 'dQw4w9WgXcQ',
+        tipos: [TipoVideo.APRENDIZAJE],
+      },
+      asignacion: {
+        titulo: 'Actividad diagnóstica',
+        descripcion: 'Entrega breve para validar comprensión inicial del tema.',
+        porcentaje: 15,
+        periodo: 1,
+        grupo: '',
+        entregable: true,
+        rubrica: 'Rúbrica diagnóstica',
+        orden: 1,
+        activa: true,
+      },
+    },
+    {
+      contenido: contenidosDemo[1] ?? contenidosDemo[0],
+      video: {
+        titulo: 'Resolución comentada de ejercicios',
+        descripcion: 'Video de apoyo para la actividad central del contenido.',
+        youtubeUrl: 'https://www.youtube.com/watch?v=9bZkp7q19f0',
+        youtubeId: '9bZkp7q19f0',
+        tipos: [TipoVideo.ACTIVIDAD, TipoVideo.APRENDIZAJE],
+      },
+      asignacion: {
+        titulo: 'Práctica de aplicación',
+        descripcion: 'Actividad evaluable con evidencia en archivo.',
+        porcentaje: 25,
+        periodo: 1,
+        grupo: 'TC-01',
+        entregable: true,
+        rubrica: 'Rúbrica práctica',
+        orden: 2,
+        activa: true,
+      },
+    },
+    {
+      contenido: contenidosDemo[2] ?? contenidosDemo[0],
+      video: {
+        titulo: 'Revisión del caso de estudio',
+        descripcion: 'Material audiovisual complementario para profundizar el tema.',
+        youtubeUrl: 'https://www.youtube.com/watch?v=3JZ_D3ELwOQ',
+        youtubeId: '3JZ_D3ELwOQ',
+        tipos: [TipoVideo.OTRO],
+      },
+      asignacion: {
+        titulo: 'Análisis del caso',
+        descripcion: 'Entrega escrita con observaciones del contenido y del video.',
+        porcentaje: 20,
+        periodo: 2,
+        grupo: '',
+        entregable: true,
+        rubrica: 'Rúbrica de análisis',
+        orden: 1,
+        activa: true,
+      },
+    },
+  ];
+
+  for (const registro of registros) {
+    const [video] = await prisma.$queryRawUnsafe<
+      { id: number }[]
+    >(
+      `
+        INSERT INTO "Video" ("titulo", "descripcion", "youtubeUrl", "youtubeId", "tipos", "publicado", "contenidoId")
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+      `,
+      registro.video.titulo,
+      registro.video.descripcion,
+      registro.video.youtubeUrl,
+      registro.video.youtubeId,
+      registro.video.tipos,
+      true,
+      registro.contenido.id,
+    );
+
+    const asignacion = await prisma.asignacion.create({
+      data: {
+        ...registro.asignacion,
+        contenidoId: registro.contenido.id,
+      },
+    });
+
+    await prisma.$executeRawUnsafe(
+      `
+        INSERT INTO "_AsignacionToVideo" ("A", "B")
+        VALUES ($1, $2)
+        ON CONFLICT DO NOTHING
+      `,
+      asignacion.id,
+      video.id,
+    );
+  }
+}
+
 async function sembrarInsignias() {
   await prisma.insignia.createMany({
     data: [
@@ -225,6 +355,7 @@ async function main() {
 
   await sembrarUnidades(unidades);
   await sembrarContenidos(contenidos);
+  await sembrarVideosYAsignacionesDemo();
   await sembrarInsignias();
 
   console.log(`✅ Seed completado: ${unidades.length} unidades y ${contenidos.length} contenidos.`);

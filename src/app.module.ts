@@ -10,6 +10,7 @@ import { RubricaModule } from './rubrica/rubrica.module';
 import { InsigniaModule } from './insignia/insignia.module';
 import { AsignacionModule } from './asignacion/asignacion.module';
 import { VideoModule } from './video/video.module';
+import { EvaluacionModule } from './evaluacion/evaluacion.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -23,6 +24,7 @@ import { AppService } from './app.service';
     InsigniaModule,
     AsignacionModule,
     VideoModule,
+    EvaluacionModule,
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile:
