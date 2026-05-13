@@ -68,12 +68,20 @@ DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DBNAME
 NODE_ENV=production
 ```
 
+Variables alternativas compatibles:
+
+```bash
+DATABASE_PRIVATE_URL=postgresql://USER:PASSWORD@HOST:PORT/DBNAME
+# o variables PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
+```
+
 Notas de despliegue:
 
 - Railway debe exponer `PORT`; la app ya lo toma automáticamente.
 - El servicio ahora arranca con `node dist/main`, no con `nest start`.
 - Si `DATABASE_URL` no existe, la app fallará con un error explícito en vez de intentar conectarse a `localhost:5432`.
 - Si usas PostgreSQL de Railway, vincula la base al servicio backend para que inyecte `DATABASE_URL`.
+- En Railway no uses `localhost`, `127.0.0.1` ni `::1` como host de Postgres. Debes usar la URL privada/pública del servicio PostgreSQL vinculado.
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 

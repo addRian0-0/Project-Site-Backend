@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { existsSync, readFileSync } from 'fs';
+import { URL } from 'url';
 
 const { Pool } = require('pg');
 
@@ -227,8 +228,15 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private getDatabaseUrl() {
-    const databaseUrl = process.env.DATABASE_URL?.trim();
+    const databaseUrl =
+      process.env.DATABASE_URL?.trim() ??
+      process.env.DATABASE_PRIVATE_URL?.trim() ??
+      process.env.DATABASE_PUBLIC_URL?.trim() ??
+      process.env.POSTGRES_URL?.trim() ??
+      this.buildDatabaseUrlFromPgEnv();
+
     if (databaseUrl) {
+      this.assertDatabaseUrlIsReachable(databaseUrl);
       return databaseUrl;
     }
 
@@ -254,6 +262,53 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     throw new Error(
       'DATABASE_URL no esta configurada. Revisa el archivo .env o las variables de entorno del despliegue.',
     );
+  }
+
+  private buildDatabaseUrlFromPgEnv() {
+    const host = process.env.PGHOST?.trim();
+    const port = process.env.PGPORT?.trim();
+    const database = process.env.PGDATABASE?.trim();
+    const user = process.env.PGUSER?.trim();
+    const password = process.env.PGPASSWORD?.trim();
+
+    if (!host || !port || !database || !user || !password) {
+      return null;
+    }
+
+    const url = new URL('postgresql://placeholder');
+    url.hostname = host;
+    url.port = port;
+    url.pathname = `/${database}`;
+    url.username = user;
+    url.password = password;
+
+    const sslMode = process.env.PGSSLMODE?.trim();
+    if (sslMode) {
+      url.searchParams.set('sslmode', sslMode);
+    }
+
+    return url.toString();
+  }
+
+  private assertDatabaseUrlIsReachable(databaseUrl: string) {
+    const isProductionLike = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
+    if (!isProductionLike) {
+      return;
+    }
+
+    let hostname: string;
+
+    try {
+      hostname = new URL(databaseUrl).hostname;
+    } catch {
+      return;
+    }
+
+    if (['localhost', '127.0.0.1', '::1'].includes(hostname)) {
+      throw new Error(
+        'DATABASE_URL apunta a localhost. En Railway debes vincular PostgreSQL al servicio backend o usar la URL privada/publica que entrega Railway; localhost dentro del contenedor no apunta a tu base.',
+      );
+    }
   }
 
   private async ensureAlumnoSchema() {
