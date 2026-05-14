@@ -6,6 +6,7 @@ import {
   scryptSync,
   timingSafeEqual,
 } from 'crypto';
+import { UnauthorizedException } from '@nestjs/common';
 import { EstadoUsuario, RolUsuario } from '../alumno/entities/alumno.entity';
 
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 12;
@@ -54,6 +55,19 @@ function getTransportSecret() {
   return DEV_TRANSPORT_SECRET;
 }
 
+function getTransportSecretCandidates() {
+  const candidates = [
+    process.env.AUTH_TRANSPORT_SECRET?.trim(),
+    process.env.AUTH_SECRET?.trim(),
+  ].filter((value): value is string => Boolean(value));
+
+  if (candidates.length > 0) {
+    return Array.from(new Set(candidates));
+  }
+
+  return [getTransportSecret()];
+}
+
 function toBase64Url(value: string) {
   return Buffer.from(value, 'utf8').toString('base64url');
 }
@@ -66,8 +80,10 @@ function signValue(value: string) {
   return createHmac('sha256', getAuthSecret()).update(value).digest('base64url');
 }
 
-function buildTransportKey() {
-  return createHash('sha256').update(getTransportSecret()).digest();
+function buildTransportKeys() {
+  return getTransportSecretCandidates().map((secret) =>
+    createHash('sha256').update(secret).digest(),
+  );
 }
 
 export function decodeIncomingPassword(value: string) {
@@ -78,23 +94,33 @@ export function decodeIncomingPassword(value: string) {
   const [, ivBase64, cipherBase64] = value.split('::');
 
   if (!ivBase64 || !cipherBase64) {
-    throw new Error('Formato de contraseña cifrada inválido');
+    throw new UnauthorizedException('Formato de contraseña cifrada inválido');
   }
 
   const iv = Buffer.from(ivBase64, 'base64');
   const payload = Buffer.from(cipherBase64, 'base64');
 
   if (payload.length < 17) {
-    throw new Error('Contenido cifrado incompleto');
+    throw new UnauthorizedException('Contenido cifrado incompleto');
   }
 
   const authTag = payload.subarray(payload.length - 16);
   const encrypted = payload.subarray(0, payload.length - 16);
-  const decipher = createDecipheriv('aes-256-gcm', buildTransportKey(), iv);
-  decipher.setAuthTag(authTag);
 
-  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-  return decrypted.toString('utf8');
+  for (const key of buildTransportKeys()) {
+    try {
+      const decipher = createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(authTag);
+      const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+      return decrypted.toString('utf8');
+    } catch (_error) {
+      // Intentamos claves compatibles para no romper logins de despliegues previos.
+    }
+  }
+
+  throw new UnauthorizedException(
+    'No fue posible validar la contraseña cifrada. Revisa AUTH_TRANSPORT_SECRET en frontend y backend.',
+  );
 }
 
 export function hashPassword(password: string) {
